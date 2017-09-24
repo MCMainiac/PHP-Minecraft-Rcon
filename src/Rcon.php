@@ -58,11 +58,11 @@ class Rcon
         return $this->lastResponse;
     }
 
-    /**
-     * Connect to a server.
-     *
-     * @return boolean
-     */
+	/**
+	 * Connect to a server.
+	 *
+	 * @return boolean
+	 */
     public function connect()
     {
         $this->socket = fsockopen($this->host, $this->port, $errno, $errstr, $this->timeout);
@@ -87,7 +87,7 @@ class Rcon
     public function disconnect()
     {
         if ($this->socket) {
-                    fclose($this->socket);
+	        fclose($this->socket);
         }
     }
 
@@ -101,17 +101,18 @@ class Rcon
         return $this->authorized;
     }
 
-    /**
-     * Send a command to the connected server.
-     *
-     * @param string $command
-     *
-     * @return boolean|mixed
-     */
+	/**
+	 * Send a command to the connected server.
+	 *
+	 * @param string $command
+	 *
+	 * @return boolean|mixed
+	 * @throws \LengthException
+	 */
     public function sendCommand($command)
     {
         if (!$this->isConnected()) {
-                    return false;
+	        return false;
         }
 
         // send command packet
@@ -130,15 +131,20 @@ class Rcon
         return false;
     }
 
-    /**
-     * Log into the server with the given credentials.
-     *
-     * @return boolean
-     */
+	/**
+	 * Log into the server with the given credentials.
+	 *
+	 * @return boolean
+	 */
     private function authorize()
     {
         $this->writePacket(self::PACKET_AUTHORIZE, self::SERVERDATA_AUTH, $this->password);
-        $response_packet = $this->readPacket();
+
+	    // authorization packets shouldn't be sent in multiple packets
+	    $response_packet = [];
+        try {
+	        $response_packet = $this->readPacket();
+        } catch (\LengthException $ignored) {}
 
         if ($response_packet['type'] == self::SERVERDATA_AUTH_RESPONSE) {
             if ($response_packet['id'] == self::PACKET_AUTHORIZE) {
@@ -186,11 +192,12 @@ class Rcon
         fwrite($this->socket, $packet, strlen($packet));
     }
 
-    /**
-     * Read a packet from the socket stream.
-     *
-     * @return array
-     */
+	/**
+	 * Read a packet from the socket stream.
+	 *
+	 * @return array
+	 * @throws \LengthException
+	 */
     private function readPacket()
     {
         //get packet size.
@@ -203,6 +210,9 @@ class Rcon
         // from the RCON protocol specification at
         // https://developer.valvesoftware.com/wiki/Source_RCON_Protocol
         // currently, this script does not support multi-packet responses.
+
+	    if ($size > 4096)
+	    	throw new \LengthException("Multiple-packet responses are not supported right now!");
 
         $packet_data = fread($this->socket, $size);
         $packet_pack = unpack('V1id/V1type/a*body', $packet_data);
